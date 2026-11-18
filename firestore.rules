@@ -1,0 +1,94 @@
+rules_version = '2';
+service cloud.firestore {
+ match /databases/{database}/documents {
+  function mem(){return request.auth!=null && exists(/databases/$(database)/documents/users/$(request.auth.uid));}
+  function M(m){return get(/databases/$(database)/documents/matches/$(m)).data;}
+  function isP(m){return request.auth!=null && request.auth.uid in M(m).players;}
+  function acc(a,b){return exists(/databases/$(database)/documents/friends/$(a+'_'+b)) && get(/databases/$(database)/documents/friends/$(a+'_'+b)).data.status=='accepted';}
+  function fr(a,b){return acc(a,b)||acc(b,a);}
+  function fin(m){let d=M(m);return d.status=='playing' && exists(/databases/$(database)/documents/matches/$(m)/answers/$(d.p1+'_'+string(d.n-1))) && exists(/databases/$(database)/documents/matches/$(m)/answers/$(d.p2+'_'+string(d.n-1)));}
+  function timeOk(m,d){
+   let s = d.q==0 ? M(m).startAt : get(/databases/$(database)/documents/matches/$(m)/answers/$(request.auth.uid+'_'+string(d.q-1))).data.at;
+   return d.choice>=0 ? request.time <= s + duration.value(122,'s') : request.time >= s + duration.value(118,'s');
+  }
+
+  // config/invite = {code:"AY2009"} (تُنشأ يدويًا من الكونسول، ولا يمكن قراءتها من الموقع)
+  match /config/{x} { allow read, write: if false; }
+
+  match /signups/{u} {
+   allow get: if request.auth.uid==u;
+   allow create: if request.auth.uid==u && request.resource.data.keys().hasOnly(['code'])
+     && request.resource.data.code==get(/databases/$(database)/documents/config/invite).data.code;
+  }
+  match /private/{u} { allow read, write: if request.auth.uid==u && exists(/databases/$(database)/documents/signups/$(u)); }
+  match /uniqueIds/{i} {
+   allow read: if mem();
+   allow create: if request.auth!=null && request.resource.data.keys().hasOnly(['uid']) && request.resource.data.uid==request.auth.uid
+     && exists(/databases/$(database)/documents/signups/$(request.auth.uid));
+  }
+  match /users/{u} {
+   allow get: if request.auth!=null && (request.auth.uid==u || mem());
+   allow list: if mem();
+   allow create: if request.auth.uid==u && exists(/databases/$(database)/documents/signups/$(u))
+     && request.resource.data.keys().hasOnly(['name','bio','uniqueId','createdAt'])
+     && request.resource.data.name.size()<=40
+     && getAfter(/databases/$(database)/documents/uniqueIds/$(request.resource.data.uniqueId)).data.uid==u;
+   allow update: if request.auth.uid==u && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','bio'])
+     && request.resource.data.name.size()<=40 && request.resource.data.bio.size()<=200;
+  }
+  match /friends/{f} {
+   allow read: if request.auth!=null && request.auth.uid in resource.data.users;
+   allow create: if mem() && request.resource.data.from==request.auth.uid && request.resource.data.from!=request.resource.data.to
+     && f==request.auth.uid+'_'+request.resource.data.to && request.resource.data.status=='pending'
+     && request.resource.data.users==[request.resource.data.from,request.resource.data.to]
+     && request.resource.data.keys().hasOnly(['users','from','to','status']);
+   allow update: if request.auth.uid==resource.data.to && resource.data.status=='pending' && request.resource.data.status=='accepted'
+     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']);
+   allow delete: if request.auth.uid in resource.data.users;
+  }
+  match /notifications/{n} {
+   allow read: if request.auth!=null && resource.data.toUserId==request.auth.uid;
+   allow create: if mem() && request.resource.data.from==request.auth.uid && request.resource.data.msg.size()<200
+     && request.resource.data.keys().hasOnly(['toUserId','from','msg','read','createdAt']);
+   allow update: if request.auth!=null && resource.data.toUserId==request.auth.uid
+     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+  }
+  match /matches/{m} {
+   allow read: if request.auth!=null && request.auth.uid in resource.data.players;
+   allow create: if mem() && request.resource.data.p1==request.auth.uid && request.resource.data.p1!=request.resource.data.p2
+     && request.resource.data.players==[request.resource.data.p1,request.resource.data.p2]
+     && request.resource.data.status=='invited' && request.resource.data.p1Ready==false && request.resource.data.p2Ready==false
+     && request.resource.data.startAt==null && request.resource.data.questions==null
+     && fr(request.resource.data.p1,request.resource.data.p2)
+     && request.resource.data.keys().hasOnly(['p1','p2','players','status','p1Ready','p2Ready','startAt','questions','n','createdAt']);
+   allow update: if mem() && request.auth.uid in resource.data.players && (
+     (request.auth.uid==resource.data.p2 && resource.data.status=='invited'
+       && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']) && request.resource.data.status in ['setup','declined'])
+     || (resource.data.status=='setup' && resource.data.questions==null && request.resource.data.status=='lobby'
+       && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['questions','n','status'])
+       && request.resource.data.n>=3 && request.resource.data.n<=30 && request.resource.data.questions.size()==request.resource.data.n
+       && get(/databases/$(database)/documents/matches/$(m)/secret/key).data.k.size()==request.resource.data.n)
+     || (resource.data.status=='lobby' && ((request.auth.uid==resource.data.p1 && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['p1Ready']))
+       || (request.auth.uid==resource.data.p2 && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['p2Ready']))))
+     || (resource.data.status=='lobby' && resource.data.p1Ready && resource.data.p2Ready && resource.data.startAt==null
+       && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','startAt'])
+       && request.resource.data.status=='playing' && request.resource.data.startAt==request.time));
+   // مفتاح الإجابات: لا يُقرأ إلا بعد انتهاء الطرفين
+   match /secret/{k} {
+    allow create: if mem() && isP(m) && k=='key' && M(m).status=='setup' && request.resource.data.keys().hasOnly(['k']) && request.resource.data.k is string;
+    allow get: if isP(m) && fin(m);
+   }
+   // الإجابات: لا تتعدل، التوقيت يُفحص بوقت الخادم، ولا يرى اللاعب إجابات خصمه قبل النهاية
+   match /answers/{a} {
+    allow read: if isP(m) && (resource.data.uid==request.auth.uid || fin(m));
+    allow create: if mem() && isP(m) && M(m).status=='playing'
+      && request.resource.data.keys().hasOnly(['uid','q','choice','at'])
+      && request.resource.data.uid==request.auth.uid && request.resource.data.q is int
+      && request.resource.data.q>=0 && request.resource.data.q<M(m).n
+      && a==request.auth.uid+'_'+string(request.resource.data.q)
+      && request.resource.data.choice in [-1,0,1,2,3] && request.resource.data.at==request.time
+      && timeOk(m,request.resource.data);
+   }
+  }
+ }
+}

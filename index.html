@@ -1,0 +1,153 @@
+<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>AY Arena</title><link rel="manifest" href="manifest.json"><link rel="icon" type="image/png" href="icon-192.png"><link rel="apple-touch-icon" href="apple-touch-icon.png"><meta name="theme-color" content="#0a0a10">
+<style>
+:root{--c:#151522;--c2:#1d1d2e;--r:#c0173a;--b:#1e40af;--t:#ececf3;--m:#8b8ba3}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 80% -10%,#2a0a14,#0a0a10 55%) fixed;color:var(--t);font-family:system-ui,"Segoe UI",Tahoma,sans-serif;min-height:100vh}
+a{color:inherit;text-decoration:none}h2,h3{margin:.5em 0}
+nav{position:fixed;inset:0 0 0 auto;width:220px;background:var(--c);display:flex;flex-direction:column;padding:16px 10px;gap:4px;border-left:1px solid #26263a}
+nav a{display:flex;gap:10px;align-items:center;padding:12px;border-radius:12px;color:var(--m)}nav a.on,nav a:hover{background:var(--c2);color:var(--t)}nav a.ct{margin-top:auto;border-top:1px solid #26263a}
+main{margin-right:220px;padding:24px;max-width:920px}
+.card{background:var(--c);border:1px solid #26263a;border-radius:16px;padding:16px;margin:0 0 12px;display:block}.row{display:flex;align-items:center;gap:10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:12px}
+.btn{display:inline-block;background:linear-gradient(135deg,var(--r),#7a0f26);color:#fff;border:0;border-radius:12px;padding:11px 16px;font:inherit;cursor:pointer;margin:4px 0}.btn.ghost{background:var(--c2)}
+input,select{width:100%;background:var(--c2);color:var(--t);border:1px solid #2c2c44;border-radius:12px;padding:12px;font:inherit;margin:6px 0}
+.opt{display:block;width:100%;text-align:right;margin:8px 0;padding:14px}.opt:hover{background:var(--b)}
+.tm{font-size:46px;font-weight:700;text-align:center;font-variant-numeric:tabular-nums}.tm.low{color:#ff4d6d}
+.av{width:40px;height:40px;border-radius:50%;background:var(--b);display:grid;place-items:center;font-weight:700;flex:none}
+.toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:var(--c2);border:1px solid var(--r);padding:10px 16px;border-radius:12px;z-index:9;animation:in .3s}
+.vs{display:flex;justify-content:space-around;align-items:center;font-size:18px}.mut{color:var(--m)}.err{color:#ff6b81;min-height:20px}.bd{background:var(--r);border-radius:10px;padding:0 7px;font-size:12px;font-style:normal}
+.win{text-align:center;animation:pop .7s}.auth{max-width:380px;margin:8vh auto;padding:16px}
+@keyframes in{from{opacity:0;top:-20px}}@keyframes pop{50%{transform:scale(1.12)}}
+@media(max-width:760px){nav{inset:auto 0 0 0;width:auto;flex-direction:row;justify-content:space-around;padding:6px 6px calc(6px + env(safe-area-inset-bottom));border-left:0;border-top:1px solid #26263a;z-index:5}nav span{display:none}nav a.ct{margin:0;border:0}main{margin:0;padding:16px 14px 90px}}
+</style></head><body><div id="app"></div>
+<script type="module">
+import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import{getAuth,onAuthStateChanged,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import{getFirestore,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,collection,query,where,onSnapshot,writeBatch,serverTimestamp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+/* ===== ضع بيانات مشروعك هنا ===== */
+const cfg={apiKey:"YOUR_API_KEY",authDomain:"YOUR_PROJECT.firebaseapp.com",projectId:"YOUR_PROJECT",appId:"YOUR_APP_ID"};
+const WORKER="https://YOUR-WORKER.workers.dev";
+const db=getFirestore(initializeApp(cfg)),auth=getAuth();
+const $=s=>document.querySelector(s),v=i=>($('#'+i)?.value||'').trim(),esc=s=>String(s??'').replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
+const A={};window.A=A;
+let uid,me,U={},F=[],MS={},NT=[],RC={},ANS=null,ansId='',ansUn=null,busy=0,lastTry=0,regBusy=0,lk='',subs=[],started=0,pollT=0;
+const toast=t=>{const e=document.createElement('div');e.className='toast';e.textContent=t;document.body.append(e);setTimeout(()=>e.remove(),3500)};
+const user=async id=>U[id]||(U[id]=(await getDoc(doc(db,'users',id))).data()||{name:'؟'});
+const other=m=>m.p1==uid?m.p2:m.p1,ts=x=>x?.seconds||0,av=n=>`<div class=av>${esc((n||'?')[0])}</div>`;
+const notify=(to,msg)=>addDoc(collection(db,'notifications'),{toUserId:to,from:uid,msg,read:false,createdAt:serverTimestamp()}).catch(()=>{});
+const mmid=()=>location.hash.split('/')[1];
+const row=(id,x)=>`<div class="card row">${av(U[id].name)}<div><b>${esc(U[id].name)}</b><div class=mut>${esc(U[id].uniqueId)}</div><small class=mut>${esc(U[id].bio||'')}</small></div><span style=flex:1></span>${x}</div>`;
+
+/* ---------- الدخول ---------- */
+function authView(m='in'){const up=m=='up';$('#app').innerHTML=`<div class=auth><div class=card><h1>⚔️ AY Arena</h1><p class=mut>منافسة المذاكرة بين الأصدقاء</p>${up?'<input id=n placeholder="الاسم">':''}<input id=p inputmode=tel placeholder="رقم الهاتف"><input id=pw type=password placeholder="كلمة السر">${up?'<input id=pw2 type=password placeholder="تأكيد كلمة السر"><input id=c placeholder="رمز الدخول" autocomplete=off>':''}<div id=err class=err></div><button class=btn onclick="A.${up?'reg':'login'}()">${up?'إنشاء حساب':'تسجيل الدخول'}</button><br><button class="btn ghost" onclick="A.mode('${up?'in':'up'}')">${up?'لدي حساب':'إنشاء حساب جديد'}</button></div></div>`}
+A.mode=authView;
+const em=()=>v('p').replace(/\D/g,'')+'@ay-study.app';
+A.login=async()=>{try{await signInWithEmailAndPassword(auth,em(),$('#pw').value)}catch(e){$('#err').textContent='بيانات الدخول غير صحيحة'}};
+A.reg=async()=>{const n=v('n'),pw=$('#pw').value,e=$('#err');
+ if(!n||!/^\d{8,15}$/.test(v('p').replace(/\D/g,''))||pw.length<6||pw!=$('#pw2').value)return e.textContent='تحقق من البيانات (كلمة السر 6 أحرف على الأقل)';
+ regBusy=1;let u;try{u=(await createUserWithEmailAndPassword(auth,em(),pw)).user}catch(x){regBusy=0;return e.textContent='الرقم مستخدم أو غير صالح'}
+ try{await setDoc(doc(db,'signups',u.uid),{code:v('c')})}catch(x){await u.delete();regBusy=0;authView('up');return $('#err').textContent='رمز الدخول غير صحيح'}
+ for(let i=0;i<6;i++){const id='AY-'+(100000+Math.floor(Math.random()*900000));
+  try{const b=writeBatch(db);b.set(doc(db,'uniqueIds',id),{uid:u.uid});b.set(doc(db,'users',u.uid),{name:n.slice(0,40),bio:'',uniqueId:id,createdAt:serverTimestamp()});b.set(doc(db,'private',u.uid),{phone:v('p')});await b.commit();regBusy=0;return boot(u)}catch(x){}}
+ regBusy=0;$('#err').textContent='تعذر إنشاء الحساب'};
+A.out=()=>signOut(auth);
+
+async function boot(u){subs.forEach(f=>f());subs=[];started=0;ANS=null;if(!u){uid=me=null;return authView()}uid=u.uid;
+ try{const s=await getDoc(doc(db,'users',uid));if(!s.exists())throw 0;me=U[uid]=s.data()}catch(e){await signOut(auth);return}
+ const q=(c,f,op,val,cb)=>subs.push(onSnapshot(query(collection(db,c),where(f,op,val)),cb));
+ q('friends','users','array-contains',uid,s=>{F=s.docs.map(d=>({id:d.id,...d.data()}));render()});
+ q('matches','players','array-contains',uid,s=>{MS={};s.docs.forEach(d=>MS[d.id]={id:d.id,...d.data({serverTimestamps:'estimate'})});render()});
+ q('notifications','toUserId','==',uid,s=>{NT=s.docs.map(d=>({id:d.id,...d.data({serverTimestamps:'estimate'})}));if(started)s.docChanges().forEach(c=>c.type=='added'&&!c.doc.data().read&&toast(c.doc.data().msg));started=1;render()});
+ if(!location.hash)location.hash='home';render()}
+onAuthStateChanged(auth,u=>{if(!regBusy)boot(u)});
+
+/* ---------- النتائج (تُحسب بعد انتهاء الطرفين فقط) ---------- */
+async function result(id){if(RC[id])return RC[id];const m=MS[id];
+ try{const k=(await getDoc(doc(db,'matches',id,'secret','key'))).data().k;const as=(await getDocs(collection(db,'matches',id,'answers'))).docs.map(d=>d.data()),s={};
+  for(const p of m.players){const a=as.filter(x=>x.uid==p).sort((x,y)=>x.q-y.q);let prev=m.startAt.toMillis(),c=0,w=0,t=0;const tm=[];
+   for(const x of a){const at=x.at.toMillis();tm.push(Math.round((at-prev)/1000));prev=at;if(x.choice<0)t++;else if(String(x.choice)==k[x.q])c++;else w++}
+   s[p]={c,w,t,tm}}
+  return RC[id]={s}}catch(e){return null}}
+async function fillStats(){const o={t:0,w:0,l:0,b:0};
+ for(const m of Object.values(MS).filter(m=>m.status=='playing').sort((a,b)=>ts(b.createdAt)-ts(a.createdAt)).slice(0,15)){const r=await result(m.id);if(!r)continue;const a=r.s[uid].c,b=r.s[other(m)].c;o.t++;if(a>b)o.w++;else if(a<b)o.l++;o.b=Math.max(o.b,a)}return o}
+const stCards=o=>[['المنافسات',o.t],['الانتصارات',o.w],['الخسائر',o.l],['أفضل نتيجة',o.b],['نسبة النجاح',o.t?Math.round(o.w/o.t*100)+'%':'—']].map(([k,x])=>`<div class=card><div class=mut>${k}</div><h2>${x}</h2></div>`).join('');
+const loadSt=()=>setTimeout(()=>fillStats().then(o=>{const e=$('#st');if(e)e.innerHTML=stCards(o)}),0);
+
+/* ---------- الصفحات ---------- */
+const V={
+home:async()=>{const pend=F.filter(f=>f.status=='pending'&&f.to==uid).length,L=Object.values(MS),inv=L.filter(m=>m.status=='invited'&&m.p2==uid),act=L.filter(m=>['setup','lobby','playing'].includes(m.status)&&!RC[m.id]);
+ await Promise.all([...inv,...act].map(m=>user(other(m))));NT.filter(n=>!n.read).forEach(n=>updateDoc(doc(db,'notifications',n.id),{read:true}).catch(()=>{}));loadSt();
+ return `<h2>مرحبًا ${esc(me.name)} 👋</h2><div class=grid><a class=card href=#new>⚔️<br>بدء منافسة</a><a class=card href=#friends>👥<br>الأصدقاء والطلبات ${pend?`<i class=bd>${pend}</i>`:''}</a><a class=card href=#history>🏆<br>سجل المنافسات</a><a class=card href=#me>👤<br>حسابي</a></div><div id=st class=grid></div>
+ ${inv.map(m=>`<div class="card row">⚔️ <b>${esc(U[m.p1].name)}</b> دعاك إلى منافسة<span style=flex:1></span><button class=btn onclick="A.acc('${m.id}',1)">✓ قبول</button><button class="btn ghost" onclick="A.acc('${m.id}',0)">✕</button></div>`).join('')}
+ ${act.map(m=>`<a class="card row" href="#match/${m.id}">▶️ منافسة مع ${esc(U[other(m)].name)} — متابعة</a>`).join('')}
+ <h3>🔔 الإشعارات</h3>${[...NT].sort((a,b)=>ts(b.createdAt)-ts(a.createdAt)).slice(0,8).map(n=>`<div class=card>${esc(n.msg)}</div>`).join('')||'<p class=mut>لا توجد إشعارات</p>'}`},
+friends:async()=>{const acc=F.filter(f=>f.status=='accepted'),inc=F.filter(f=>f.status=='pending'&&f.to==uid);await Promise.all(F.map(f=>user(f.from==uid?f.to:f.from)));
+ return `<h2>👥 الأصدقاء</h2><div class=card><input id=sid placeholder="ابحث باستخدام ID مثل AY-583921"><button class=btn onclick=A.find()>بحث</button><div id=sr></div></div>
+ <h3>📨 طلبات الصداقة</h3>${inc.map(f=>row(f.from,`<button class=btn onclick="A.fr('${f.id}',1)">✓ قبول</button> <button class="btn ghost" onclick="A.fr('${f.id}',0)">✕ رفض</button>`)).join('')||'<p class=mut>لا توجد طلبات</p>'}
+ <h3>أصدقائي (${acc.length})</h3>${acc.map(f=>{const o=f.from==uid?f.to:f.from;return row(o,`<button class=btn onclick="A.inv('${o}')">⚔️ تحدي</button>`)}).join('')||'<p class=mut>أضف أصدقاءك عبر الـ ID</p>'}`},
+new:async()=>{const acc=F.filter(f=>f.status=='accepted');await Promise.all(acc.map(f=>user(f.from==uid?f.to:f.from)));
+ return `<h2>⚔️ اختر صديقًا للمنافسة</h2>${acc.map(f=>{const o=f.from==uid?f.to:f.from;return row(o,`<button class=btn onclick="A.inv('${o}')">إرسال دعوة</button>`)}).join('')||'<p class=mut>أضف صديقًا أولًا من صفحة الأصدقاء</p>'}`},
+history:async()=>{const L=Object.values(MS).sort((a,b)=>ts(b.createdAt)-ts(a.createdAt));await Promise.all(L.map(m=>user(other(m))));
+ setTimeout(()=>L.filter(m=>m.status=='playing').slice(0,15).forEach(async m=>{const r=await result(m.id),e=$('#h'+m.id);if(r&&e){const a=r.s[uid].c,b=r.s[other(m)].c;e.innerHTML=`${a} - ${b} ${a>b?'🏆 فوز':a<b?'خسارة':'تعادل'}`}}),0);
+ return `<h2>🏆 سجل المنافسات</h2>${L.map(m=>`<a class="card row" href="#match/${m.id}"><div><b>⚔️ ${esc(me.name)} vs ${esc(U[other(m)].name)}</b><div class=mut>${m.createdAt?new Date(ts(m.createdAt)*1000).toLocaleDateString('ar-EG'):''} · ${m.n||'—'} سؤال</div></div><span style=flex:1></span><span id="h${m.id}" class=mut>${{invited:'دعوة',declined:'مرفوضة',setup:'إعداد',lobby:'استعداد',playing:'…'}[m.status]}</span></a>`).join('')||'<p class=mut>لا توجد منافسات بعد</p>'}`},
+me:async()=>{loadSt();return `<h2>👤 حسابي</h2><div class=card><div class=row>${av(me.name)}<div><b>${esc(me.name)}</b><div class=mut>🆔 ${esc(me.uniqueId)}</div></div></div><input id=nm value="${esc(me.name)}"><input id=bio placeholder="السيرة الذاتية" value="${esc(me.bio||'')}"><button class=btn onclick=A.save()>حفظ</button></div><div id=st class=grid></div><p class=mut>👥 ${F.filter(f=>f.status=='accepted').length} صديق</p>`},
+contact:async()=>`<h2>📩 تواصل مع المطور</h2><div class=card><p>📧 البريد الإلكتروني</p><a href="mailto:shmedsaberahmed@gmail.com?subject=Support%20-%20Study%20Competition"><b>shmedsaberahmed@gmail.com</b></a><br><a class=btn href="mailto:shmedsaberahmed@gmail.com?subject=Support%20-%20Study%20Competition">✉️ مراسلة المطور</a></div><div class=card><p>📱 الهاتف</p><a href="tel:01108855383"><b>01108855383</b></a><br><a class=btn href="tel:01108855383">📞 اتصال بالمطور</a></div>`
+};
+function shell(r,c){const nav=[['home','🏠','الرئيسية'],['new','⚔️','المنافسة'],['friends','👥','الأصدقاء'],['history','🏆','المنافسات'],['me','👤','حسابي']];
+ $('#app').innerHTML=`<nav>${nav.map(([k,i,t])=>`<a href="#${k}" class="${r==k?'on':''}"><b>${i}</b><span>${t}</span></a>`).join('')}<a href="#" onclick="A.out();return false"><b>🚪</b><span>خروج</span></a><a href="#contact" class="ct ${r=='contact'?'on':''}"><b>📩</b><span>تواصل مع المطور</span></a></nav><main>${c}</main>`}
+async function render(){if(!uid||!me)return;const [r='home',id]=location.hash.slice(1).split('/');
+ if(r!='match'){lk='';if(ansUn){ansUn();ansUn=null;ansId=''}if(document.activeElement?.matches('input,select'))return}
+ const h=await(r=='match'?mv(id):(V[r]||V.home)());if(h!=null)shell(r,h)}
+addEventListener('hashchange',render);
+
+/* ---------- الأفعال ---------- */
+A.find=async()=>{const id=v('sid').toUpperCase(),s=await getDocs(query(collection(db,'users'),where('uniqueId','==',id))),e=$('#sr');if(s.empty)return e.innerHTML='<p class=err>لم يتم العثور على مستخدم</p>';
+ const d=s.docs[0],u=d.data();U[d.id]=u;const f=F.find(f=>f.users.includes(d.id));
+ const b=d.id==uid?'هذا حسابك':f?(f.status=='accepted'?'✓ صديق':'تم إرسال الطلب'):`<button class=btn onclick="A.add('${d.id}')">➕ إرسال طلب صداقة</button>`;
+ e.innerHTML=`<div class=row>${av(u.name)}<div><b>${esc(u.name)}</b><div class=mut>${esc(u.uniqueId)}</div><small>${esc((u.bio||'').slice(0,60))}</small></div><span style=flex:1></span>${b}</div>`};
+A.add=async to=>{await setDoc(doc(db,'friends',uid+'_'+to),{users:[uid,to],from:uid,to,status:'pending'});notify(to,`🔔 ${me.name} أرسل لك طلب صداقة`);toast('تم إرسال الطلب');$('#sr').innerHTML='تم إرسال الطلب'};
+A.fr=async(id,ok)=>{const f=F.find(x=>x.id==id);if(ok){await updateDoc(doc(db,'friends',id),{status:'accepted'});notify(f.from,`✅ ${me.name} قبل طلب صداقتك`)}else await deleteDoc(doc(db,'friends',id))};
+A.inv=async o=>{const r=await addDoc(collection(db,'matches'),{p1:uid,p2:o,players:[uid,o],status:'invited',p1Ready:false,p2Ready:false,startAt:null,questions:null,createdAt:serverTimestamp()});notify(o,`⚔️ ${me.name} دعاك إلى منافسة`);location.hash='match/'+r.id};
+A.acc=async(id,ok)=>{await updateDoc(doc(db,'matches',id),{status:ok?'setup':'declined'});notify(MS[id].p1,ok?`✅ ${me.name} قبل المنافسة`:`${me.name} رفض المنافسة`);if(ok)location.hash='match/'+id};
+A.save=async()=>{const name=v('nm').slice(0,40),bio=v('bio').slice(0,200);if(!name)return;await updateDoc(doc(db,'users',uid),{name,bio});me.name=name;me.bio=bio;toast('تم الحفظ')};
+A.rdy=()=>{const m=MS[mmid()];return updateDoc(doc(db,'matches',m.id),{[m.p1==uid?'p1Ready':'p2Ready']:true})};
+A.pick=async i=>{const m=MS[mmid()];if(!m||!ANS||busy)return;const c=Object.keys(ANS).length;if(c>=m.n)return;busy=1;
+ try{await setDoc(doc(db,'matches',m.id,'answers',uid+'_'+c),{uid,q:c,choice:i,at:serverTimestamp()})}catch(e){if(i>=0)toast('تعذر تسجيل الإجابة')}busy=0};
+const ld=u=>new Promise(r=>{const s=document.createElement('script');s.src=u;s.onload=r;document.head.append(s)});
+async function readF(f){const x=f.name.split('.').pop().toLowerCase();
+ if(x=='txt')return f.text();
+ if(x=='pdf'){const B='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';await ld(B+'pdf.min.js');pdfjsLib.GlobalWorkerOptions.workerSrc=B+'pdf.worker.min.js';const d=await pdfjsLib.getDocument({data:await f.arrayBuffer()}).promise;let t='';for(let i=1;i<=d.numPages;i++)t+=(await(await d.getPage(i)).getTextContent()).items.map(s=>s.str).join(' ')+'\n';return t}
+ if(x=='docx'){await ld('https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js');return(await mammoth.extractRawText({arrayBuffer:await f.arrayBuffer()})).value}
+ throw Error('نوع الملف غير مدعوم')}
+A.gen=async()=>{const id=mmid(),f=$('#f').files[0],st=$('#gs');if(!f)return toast('اختر ملفًا أولًا');
+ try{st.textContent='جاري قراءة الملف...';const text=(await readF(f)).slice(0,40000);if(text.trim().length<200)throw Error('الملف قصير أو غير مقروء');
+  st.textContent='🤖 جاري توليد الأسئلة...';
+  const r=await fetch(WORKER,{method:'POST',body:JSON.stringify({text,n:+$('#n').value,level:$('#lv').value,token:await auth.currentUser.getIdToken()})}),j=await r.json();if(!r.ok)throw Error(j.error||'فشل التوليد');
+  await setDoc(doc(db,'matches',id,'secret','key'),{k:j.key});
+  await updateDoc(doc(db,'matches',id),{questions:j.questions,n:j.questions.length,status:'lobby'})}catch(e){st.textContent='❌ '+(e.message||'خطأ')}};
+for(const k in A){const f=A[k];A[k]=async(...a)=>{try{return await f(...a)}catch(e){toast('حدث خطأ: '+(e.code||e.message))}}}
+
+/* ---------- شاشة المنافسة ---------- */
+async function mv(id){const m=MS[id];if(!m)return '<div class=card>جاري التحميل...</div>';
+ if(m.status=='playing'&&ansId!=id){ansUn&&ansUn();ansId=id;ANS=null;ansUn=onSnapshot(query(collection(db,'matches',id,'answers'),where('uid','==',uid)),s=>{ANS={};s.docs.forEach(d=>{const x=d.data({serverTimestamps:'estimate'});ANS[x.q]=x});render()})}
+ const c=ANS?Object.keys(ANS).length:-1,o=await user(other(m)),key=[id,m.status,m.p1Ready,m.p2Ready,!!m.questions,c,!!RC[id]].join();
+ if(key==lk)return null;lk=key;
+ const head=`<div class="card vs"><b>${esc(me.name)}</b><span class=mut>VS</span><b>${esc(o.name)}</b></div>`;
+ if(m.status=='invited')return head+(m.p2==uid?`<button class=btn onclick="A.acc('${id}',1)">✓ قبول</button> <button class="btn ghost" onclick="A.acc('${id}',0)">✕ رفض</button>`:'<p class=mut>⏳ بانتظار قبول الدعوة…</p>');
+ if(m.status=='declined')return head+'<p class=err>تم رفض الدعوة</p>';
+ if(m.status=='setup')return head+`<div class=card><h3>📄 ارفع ملف المادة (PDF / TXT / DOCX)</h3><input type=file id=f accept=".pdf,.txt,.docx"><select id=n>${[5,10,15,20,30].map(x=>`<option ${x==10?'selected':''}>${x}</option>`).join('')}</select><select id=lv><option>سهل</option><option>متوسط</option><option>صعب</option><option selected>مختلط</option></select><button class=btn onclick=A.gen()>🤖 توليد الأسئلة</button><div id=gs class=mut></div></div>`;
+ if(m.status=='lobby'){const mine=m.p1==uid?m.p1Ready:m.p2Ready;
+  if(m.p1Ready&&m.p2Ready&&!m.startAt)updateDoc(doc(db,'matches',id),{status:'playing',startAt:serverTimestamp()}).catch(()=>{});
+  return head+`<div class=card style=text-align:center><h2>⚔️ منافسة جديدة</h2><p>${m.n} أسئلة</p><p>⏱️ 120 ثانية / سؤال</p><p class=mut>${m.p1Ready?'✓':'…'} ${m.p1==uid?'أنت':esc(o.name)} · ${m.p2Ready?'✓':'…'} ${m.p2==uid?'أنت':esc(o.name)}</p>${mine?'<p>بانتظار الخصم…</p>':'<button class=btn onclick=A.rdy()>جاهز</button>'}</div>`}
+ if(c<0)return head+'<p class=mut>جاري التحميل…</p>';
+ if(RC[id]){const r=RC[id],a=r.s[uid],b=r.s[other(m)],w=a.c>b.c?me.name:a.c<b.c?o.name:null,pl=(n,x)=>`<div class=card><h3>${esc(n)}</h3><h1>${x.c} ⭐</h1><p>✓ ${x.c} · ✗ ${x.w} · ⏱ انتهى وقتها ${x.t}</p><small class=mut>الوقت لكل سؤال: ${x.tm.join('، ')} ث</small></div>`;
+  return `<h2 style=text-align:center>🏆 انتهت المنافسة</h2><div class=grid>${pl(me.name,a)}${pl(o.name,b)}</div><h2 class=win>${w?'🎉 الفائز: '+esc(w):'🤝 تعادل'}</h2>`}
+ if(c>=m.n)return head+'<div class="card" style=text-align:center>✅ أنهيت كل الأسئلة<br><span class=mut>بانتظار انتهاء الخصم لإعلان النتيجة…</span></div>';
+ const q=m.questions[c];
+ return head+`<div class=mut style=text-align:center>السؤال ${c+1} / ${m.n}</div><div id=tm class=tm>02:00</div><div class=card><h3 dir=auto>${esc(q.q)}</h3>${q.o.map((t,i)=>`<button class="btn ghost opt" dir=auto onclick="A.pick(${i})">${esc(t)}</button>`).join('')}</div>`}
+setInterval(()=>{if(!uid||!ANS)return;const id=mmid(),m=MS[id];if(!location.hash.startsWith('#match')||!m||m.status!='playing'||!m.startAt)return;const c=Object.keys(ANS).length;
+ if(c>=m.n){if(!RC[id]&&Date.now()-pollT>4000){pollT=Date.now();result(id).then(x=>x&&render())}return}
+ const st=(c?ANS[c-1]?.at:m.startAt)?.toMillis?.();if(!st)return;const rem=Math.ceil(120-(Date.now()-st)/1000),e=$('#tm'),s=Math.max(rem,0);
+ if(e){e.textContent=String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');e.classList.toggle('low',s<=15)}
+ if(rem<=0&&Date.now()-lastTry>2500){lastTry=Date.now();A.pick(-1)}},300);
+navigator.serviceWorker?.register('sw.js');
+</script></body></html>
