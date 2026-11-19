@@ -74,6 +74,7 @@ service cloud.firestore {
      || (resource.data.status=='lobby' && resource.data.p1Ready && resource.data.p2Ready && resource.data.startAt==null
        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','startAt'])
        && request.resource.data.status=='playing' && request.resource.data.startAt==request.time));
+   allow delete: if request.auth!=null && request.auth.uid in resource.data.players && resource.data.status in ['invited','setup','lobby'];
    // مفتاح الإجابات: لا يُقرأ إلا بعد انتهاء الطرفين
    match /secret/{k} {
     allow create: if mem() && isP(m) && k=='key' && M(m).status=='setup' && request.resource.data.keys().hasOnly(['k']) && request.resource.data.k is string;

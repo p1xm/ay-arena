@@ -32,7 +32,7 @@ img.av,.av{object-fit:cover;border:2px solid #c0173a}.av.lg{width:72px;height:72
 .pl{display:flex;flex-direction:column;align-items:center;gap:6px}.vsb{font-size:22px;font-weight:800;color:var(--r)}
 .bar{height:8px;background:#26263a;border-radius:8px;overflow:hidden;margin:6px 0 14px}.bar i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#1e40af,#c0173a);transition:width .3s linear}
 .opt{display:flex;align-items:center;gap:12px;border:1px solid #2c2c44}.opt .lt{background:var(--c);border-radius:8px;width:30px;height:30px;display:grid;place-items:center;font-weight:700;flex:none;color:var(--r)}
-.md{position:fixed;inset:0;background:#000b;z-index:20;display:grid;place-items:center;padding:16px}.md>div{background:var(--c);border:1px solid var(--r);border-radius:20px;padding:22px;max-width:420px;width:100%;line-height:1.9}.md ol{padding-right:20px;margin:8px 0}.inst b{display:block;margin-bottom:8px}.conf{text-align:center;font-size:30px;animation:pop 1s}h2.win{font-size:28px}
+.md{position:fixed;inset:0;background:#000b;z-index:20;display:grid;place-items:center;padding:16px}.md>div{background:var(--c);border:1px solid var(--r);border-radius:20px;padding:22px;max-width:420px;width:100%;line-height:1.9}.md ol{padding-right:20px;margin:8px 0}.inst b{display:block;margin-bottom:8px}details.card summary{cursor:pointer;font-weight:600}details.card div{margin-top:8px}.gc{color:#4ade80}.rc{color:#ff6b81}.conf{text-align:center;font-size:30px;animation:pop 1s}h2.win{font-size:28px}
 @keyframes in{from{opacity:0;top:-20px}}@keyframes pop{50%{transform:scale(1.12)}}
 @media(max-width:760px){nav{inset:auto 0 0 0;width:auto;flex-direction:row;justify-content:space-around;padding:6px 6px calc(6px + env(safe-area-inset-bottom));border-left:0;border-top:1px solid #26263a;z-index:5}nav span{display:none}nav a.ct{margin:0;border:0}main{margin:0;padding:16px 14px 90px}}
 </style></head><body><div id="app"></div>
@@ -84,10 +84,10 @@ onAuthStateChanged(auth,u=>{if(!regBusy)boot(u)});
 /* ---------- النتائج (تُحسب بعد انتهاء الطرفين فقط) ---------- */
 async function result(id){if(RC[id])return RC[id];const m=MS[id];
  try{const k=(await getDoc(doc(db,'matches',id,'secret','key'))).data().k;const as=(await getDocs(collection(db,'matches',id,'answers'))).docs.map(d=>d.data()),s={};
-  for(const p of m.players){const a=as.filter(x=>x.uid==p).sort((x,y)=>x.q-y.q);let prev=m.startAt.toMillis(),c=0,w=0,t=0;const tm=[];
-   for(const x of a){const at=x.at.toMillis();tm.push(Math.round((at-prev)/1000));prev=at;if(x.choice<0)t++;else if(String(x.choice)==k[x.q])c++;else w++}
-   s[p]={c,w,t,tm}}
-  return RC[id]={s}}catch(e){return null}}
+  for(const p of m.players){const a=as.filter(x=>x.uid==p).sort((x,y)=>x.q-y.q);let prev=m.startAt.toMillis(),c=0,w=0,t=0;const tm=[],ch=[];
+   for(const x of a){const at=x.at.toMillis();tm.push(Math.round((at-prev)/1000));ch[x.q]=x.choice;prev=at;if(x.choice<0)t++;else if(String(x.choice)==k[x.q])c++;else w++}
+   s[p]={c,w,t,tm,ch}}
+  return RC[id]={s,k}}catch(e){return null}}
 async function fillStats(){const o={t:0,w:0,l:0,b:0};
  for(const m of Object.values(MS).filter(m=>m.status=='playing').sort((a,b)=>ts(b.createdAt)-ts(a.createdAt)).slice(0,15)){const r=await result(m.id);if(!r)continue;const a=r.s[uid].c,b=r.s[other(m)].c;o.t++;if(a>b)o.w++;else if(a<b)o.l++;o.b=Math.max(o.b,a)}return o}
 const stCards=o=>[['المنافسات',o.t],['الانتصارات',o.w],['الخسائر',o.l],['أفضل نتيجة',o.b],['نسبة النجاح',o.t?Math.round(o.w/o.t*100)+'%':'—']].map(([k,x])=>`<div class="card stat"><div class=mut>${k}</div><h2>${x}</h2></div>`).join('');
@@ -95,11 +95,12 @@ const loadSt=()=>setTimeout(()=>fillStats().then(o=>{const e=$('#st');if(e)e.inn
 
 /* ---------- الصفحات ---------- */
 const V={
-home:async()=>{const pend=F.filter(f=>f.status=='pending'&&f.to==uid).length,L=Object.values(MS),inv=L.filter(m=>m.status=='invited'&&m.p2==uid),act=L.filter(m=>['setup','lobby','playing'].includes(m.status)&&!RC[m.id]);
- await Promise.all([...inv,...act].map(m=>user(other(m))));NT.filter(n=>!n.read).forEach(n=>updateDoc(doc(db,'notifications',n.id),{read:true}).catch(()=>{}));loadSt();
+home:async()=>{const pend=F.filter(f=>f.status=='pending'&&f.to==uid).length,L=Object.values(MS),inv=L.filter(m=>m.status=='invited'&&m.p2==uid),act=L.filter(m=>['setup','lobby','playing'].includes(m.status)&&!RC[m.id]),sent=L.filter(m=>m.status=='invited'&&m.p1==uid);
+ await Promise.all([...inv,...act,...sent].map(m=>user(other(m))));NT.filter(n=>!n.read).forEach(n=>updateDoc(doc(db,'notifications',n.id),{read:true}).catch(()=>{}));loadSt();
  return `<div class=hero><div class=row>${av(me.name,me.photo,'lg')}<div><h2>مرحبًا ${esc(me.name)} 👋</h2><div class=mut>🆔 ${esc(me.uniqueId)}</div></div></div></div>${inst()}<div class=grid><a class="card qa" href=#new><b>⚔️</b>بدء منافسة</a><a class="card qa" href=#friends><b>👥</b>الأصدقاء والطلبات ${pend?`<i class=bd>${pend}</i>`:''}</a><a class="card qa" href=#history><b>🏆</b>سجل المنافسات</a><a class="card qa" href=#me><b>👤</b>حسابي</a></div><div id=st class=grid></div>
  ${inv.map(m=>`<div class="card row">⚔️ <b>${esc(U[m.p1].name)}</b> دعاك إلى منافسة<span style=flex:1></span><button class=btn onclick="A.acc('${m.id}',1)">✓ قبول</button><button class="btn ghost" onclick="A.acc('${m.id}',0)">✕</button></div>`).join('')}
  ${act.map(m=>`<a class="card row" href="#match/${m.id}">▶️ منافسة مع ${esc(U[other(m)].name)} — متابعة</a>`).join('')}
+ ${sent.map(m=>`<div class="card row">⏳ دعوة مرسلة إلى <b>${esc(U[m.p2].name)}</b><span style=flex:1></span><button class="btn ghost" onclick="A.cancel('${m.id}')">✕ إلغاء</button></div>`).join('')}
  <h3>🔔 الإشعارات</h3>${[...NT].sort((a,b)=>ts(b.createdAt)-ts(a.createdAt)).slice(0,8).map(n=>`<div class=card>${esc(n.msg)}</div>`).join('')||'<p class=mut>لا توجد إشعارات</p>'}`},
 friends:async()=>{const acc=F.filter(f=>f.status=='accepted'),inc=F.filter(f=>f.status=='pending'&&f.to==uid);await Promise.all(F.map(f=>user(f.from==uid?f.to:f.from)));
  return `<h2>👥 الأصدقاء</h2><div class=card><input id=sid placeholder="ابحث باستخدام ID مثل AY-583921"><button class=btn onclick=A.find()>بحث</button><div id=sr></div></div>
@@ -133,6 +134,11 @@ A.save=async()=>{const name=v('nm').slice(0,40),bio=v('bio').slice(0,200);if(!na
 A.photo=async inp=>{const f=inp.files[0];if(!f)return;inp.blur();const im=new Image();im.src=URL.createObjectURL(f);await im.decode();const c=document.createElement('canvas');c.width=c.height=160;const z=Math.min(im.width,im.height);c.getContext('2d').drawImage(im,(im.width-z)/2,(im.height-z)/2,z,z,0,0,160,160);const photo=c.toDataURL('image/jpeg',.8);await updateDoc(doc(db,'users',uid),{photo});me.photo=photo;U[uid]=me;toast('تم تحديث الصورة');render()};
 A.andr=async()=>{if(dp){dp.prompt();await dp.userChoice;dp=null;return}modal('<b>التثبيت على أندرويد</b><ol><li>افتح الموقع من متصفح <b>Chrome</b>.</li><li>اضغط على القائمة <b>⋮</b> (أعلى اليمين).</li><li>اختر <b>تثبيت التطبيق</b> أو <b>إضافة إلى الشاشة الرئيسية</b>.</li><li>اضغط <b>تثبيت</b>.</li></ol>')};
 A.ios=()=>modal('<b>التثبيت على آيفون</b><ol><li>افتح الموقع من متصفح <b>Safari</b> (مش Chrome).</li><li>اضغط زر المشاركة <b>⬆︎</b> (أسفل الشاشة).</li><li>مرّر لأسفل واختر <b>إضافة إلى الشاشة الرئيسية</b>.</li><li>اضغط <b>إضافة</b>، وهتلاقي الأيقونة على شاشتك.</li></ol>');
+A.cancel=async id=>{if(!confirm('هل تريد إلغاء هذه المنافسة؟'))return;const m=MS[id];await deleteDoc(doc(db,'matches',id));if(m)notify(other(m),`🚫 ${me.name} ألغى المنافسة`);location.hash='home'};
+A.share=async()=>{const m=MS[mmid()],r=RC[m.id],o=U[other(m)],a=r.s[uid].c,b=r.s[other(m)].c,url=location.origin+location.pathname,
+ t=`⚔️ منافسة AY Arena: ${me.name} ${a} - ${b} ${o.name} ${a>b?'🏆 فزت!':a<b?'خسرت هذه المرة 😅':'تعادل 🤝'}\nتحدّاني على: `;
+ if(navigator.share){try{await navigator.share({title:'AY Arena',text:t,url});return}catch(e){if(e.name=='AbortError')return}}
+ await navigator.clipboard.writeText(t+url);toast('تم نسخ النتيجة والرابط ✓')};
 A.rdy=()=>{const m=MS[mmid()];return updateDoc(doc(db,'matches',m.id),{[m.p1==uid?'p1Ready':'p2Ready']:true})};
 A.pick=async i=>{const m=MS[mmid()];if(!m||!ANS||busy)return;const c=Object.keys(ANS).length;if(c>=m.n)return;busy=1;
  try{await setDoc(doc(db,'matches',m.id,'answers',uid+'_'+c),{uid,q:c,choice:i,at:serverTimestamp()})}catch(e){if(i>=0)toast('تعذر تسجيل الإجابة')}busy=0};
@@ -151,20 +157,22 @@ A.gen=async()=>{const id=mmid(),f=$('#f').files[0],st=$('#gs');if(!f)return toas
 for(const k in A){const f=A[k];A[k]=async(...a)=>{try{return await f(...a)}catch(e){toast('حدث خطأ: '+(e.code||e.message))}}}
 
 /* ---------- شاشة المنافسة ---------- */
-async function mv(id){const m=MS[id];if(!m)return '<div class=card>جاري التحميل...</div>';
+async function mv(id){const m=MS[id];if(!m)return '<div class=card>المنافسة غير متاحة أو تم إلغاؤها.<br><a class=btn href=#home>الرئيسية</a></div>';
  if(m.status=='playing'&&ansId!=id){ansUn&&ansUn();ansId=id;ANS=null;ansUn=onSnapshot(query(collection(db,'matches',id,'answers'),where('uid','==',uid)),s=>{ANS={};s.docs.forEach(d=>{const x=d.data({serverTimestamps:'estimate'});ANS[x.q]=x});render()})}
  const c=ANS?Object.keys(ANS).length:-1,o=await user(other(m)),key=[id,m.status,m.p1Ready,m.p2Ready,!!m.questions,c,!!RC[id]].join();
  if(key==lk)return null;lk=key;
  const head=`<div class="card vs"><div class=pl>${av(me.name,me.photo,'lg')}<b>${esc(me.name)}</b></div><span class=vsb>VS</span><div class=pl>${av(o.name,o.photo,'lg')}<b>${esc(o.name)}</b></div></div>`;
- if(m.status=='invited')return head+(m.p2==uid?`<button class=btn onclick="A.acc('${id}',1)">✓ قبول</button> <button class="btn ghost" onclick="A.acc('${id}',0)">✕ رفض</button>`:'<p class=mut>⏳ بانتظار قبول الدعوة…</p>');
+ if(m.status=='invited')return head+(m.p2==uid?`<button class=btn onclick="A.acc('${id}',1)">✓ قبول</button> <button class="btn ghost" onclick="A.acc('${id}',0)">✕ رفض</button>`:`<p class=mut>⏳ بانتظار قبول الدعوة…</p><button class="btn ghost" onclick="A.cancel('${id}')">✕ إلغاء الدعوة</button>`);
  if(m.status=='declined')return head+'<p class=err>تم رفض الدعوة</p>';
- if(m.status=='setup')return head+`<div class=card><h3>📄 ارفع ملف المادة (PDF / TXT / DOCX)</h3><input type=file id=f accept=".pdf,.txt,.docx"><select id=n>${[5,10,15,20,30].map(x=>`<option ${x==5?'selected':''}>${x}</option>`).join('')}</select><select id=lv><option>سهل</option><option>متوسط</option><option>صعب</option><option selected>مختلط</option></select><button class=btn onclick=A.gen()>🤖 توليد الأسئلة</button><div id=gs class=mut></div></div>`;
+ if(m.status=='setup')return head+`<div class=card><h3>📄 ارفع ملف المادة (PDF / TXT / DOCX)</h3><input type=file id=f accept=".pdf,.txt,.docx"><select id=n>${[5,10,15,20,30].map(x=>`<option ${x==5?'selected':''}>${x}</option>`).join('')}</select><select id=lv><option>سهل</option><option>متوسط</option><option>صعب</option><option selected>مختلط</option></select><button class=btn onclick=A.gen()>🤖 توليد الأسئلة</button><div id=gs class=mut></div></div><button class="btn ghost" onclick="A.cancel('${id}')">✕ إلغاء التحدي</button>`;
  if(m.status=='lobby'){const mine=m.p1==uid?m.p1Ready:m.p2Ready;
   if(m.p1Ready&&m.p2Ready&&!m.startAt)updateDoc(doc(db,'matches',id),{status:'playing',startAt:serverTimestamp()}).catch(()=>{});
-  return head+`<div class=card style=text-align:center><h2>⚔️ منافسة جديدة</h2><p>${m.n} أسئلة</p><p>⏱️ 120 ثانية / سؤال</p><p class=mut>${m.p1Ready?'✓':'…'} ${m.p1==uid?'أنت':esc(o.name)} · ${m.p2Ready?'✓':'…'} ${m.p2==uid?'أنت':esc(o.name)}</p>${mine?'<p>بانتظار الخصم…</p>':'<button class=btn onclick=A.rdy()>جاهز</button>'}</div>`}
+  return head+`<div class=card style=text-align:center><h2>⚔️ منافسة جديدة</h2><p>${m.n} أسئلة</p><p>⏱️ 120 ثانية / سؤال</p><p class=mut>${m.p1Ready?'✓':'…'} ${m.p1==uid?'أنت':esc(o.name)} · ${m.p2Ready?'✓':'…'} ${m.p2==uid?'أنت':esc(o.name)}</p>${mine?'<p>بانتظار الخصم…</p>':'<button class=btn onclick=A.rdy()>جاهز</button>'}</div><button class="btn ghost" onclick="A.cancel('${id}')">✕ إلغاء التحدي</button>`}
  if(c<0)return head+'<p class=mut>جاري التحميل…</p>';
  if(RC[id]){const r=RC[id],a=r.s[uid],b=r.s[other(m)],w=a.c>b.c?me.name:a.c<b.c?o.name:null,pl=(n,x)=>`<div class=card><h3>${esc(n)}</h3><h1>${x.c} ⭐</h1><p>✓ ${x.c} · ✗ ${x.w} · ⏱ انتهى وقتها ${x.t}</p><small class=mut>الوقت لكل سؤال: ${x.tm.join('، ')} ث</small></div>`;
-  return `<h2 style=text-align:center>🏆 انتهت المنافسة</h2><div class=grid>${pl(me.name,a)}${pl(o.name,b)}</div><div class=conf>${w?'🎉✨🏆✨🎉':'🤝'}</div><h2 class=win>${w?'🎉 الفائز: '+esc(w):'🤝 تعادل'}</h2>`}
+  const qd=m.questions.map((q,i)=>{const ok=+r.k[i],mc=a.ch[i],oc=b.ch[i],st=mc<0?'⏱':mc==ok?'✓':'✗',ans=(c)=>c==null||c<0?'انتهى الوقت':esc(q.o[c]);
+   return `<details class=card><summary>${st} س${i+1}: ${esc(q.q.slice(0,70))}</summary><div>الإجابة الصحيحة: <b class=gc>${esc(q.o[ok])}</b></div><div>إجابتك: <b class="${mc==ok?'gc':'rc'}">${ans(mc)}</b></div><div>${esc(o.name)}: <b class="${oc==ok?'gc':'rc'}">${ans(oc)}</b></div></details>`}).join('');
+  return `<h2 style=text-align:center>🏆 انتهت المنافسة</h2><div class=grid>${pl(me.name,a)}${pl(o.name,b)}</div><div class=conf>${w?'🎉✨🏆✨🎉':'🤝'}</div><h2 class=win>${w?'🎉 الفائز: '+esc(w):'🤝 تعادل'}</h2><div style=text-align:center><button class=btn onclick=A.share()>📤 مشاركة النتيجة</button> <a class="btn ghost" href=#home>الرئيسية</a></div><h3>📋 تفاصيل الأسئلة</h3>${qd}`}
  if(c>=m.n)return head+'<div class="card" style=text-align:center>✅ أنهيت كل الأسئلة<br><span class=mut>بانتظار انتهاء الخصم لإعلان النتيجة…</span></div>';
  const q=m.questions[c];
  return head+`<div class=mut style=text-align:center>السؤال ${c+1} / ${m.n}</div><div id=tm class=tm>02:00</div><div class=bar><i id=bb></i></div><div class=card><h3 dir=auto>${esc(q.q)}</h3>${q.o.map((t,i)=>`<button class="btn ghost opt" dir=auto onclick="A.pick(${i})"><span class=lt>${'أبجد'[i]}</span><span>${esc(t)}</span></button>`).join('')}</div>`}
