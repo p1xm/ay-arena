@@ -24,8 +24,8 @@ import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-ap
 import{getAuth,onAuthStateChanged,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import{getFirestore,doc,getDoc,getDocs,setDoc,addDoc,updateDoc,deleteDoc,collection,query,where,onSnapshot,writeBatch,serverTimestamp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 /* ===== ضع بيانات مشروعك هنا ===== */
-const cfg={apiKey:"YOUR_API_KEY",authDomain:"YOUR_PROJECT.firebaseapp.com",projectId:"YOUR_PROJECT",appId:"YOUR_APP_ID"};
-const WORKER="https://YOUR-WORKER.workers.dev";
+const cfg={apiKey:"AIzaSyDaFqoQyf4z7elcrlT2inK4ajNhXpHkQU4",authDomain:"ay-arena.firebaseapp.com",projectId:"ay-arena",appId:"1:928143530367:web:0dc7d8dbb3a5a0ad20a24a"};
+const WORKER="https://ay-arena-ai.shmedsaberahmed.workers.dev";
 const db=getFirestore(initializeApp(cfg)),auth=getAuth();
 const $=s=>document.querySelector(s),v=i=>($('#'+i)?.value||'').trim(),esc=s=>String(s??'').replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
 const A={};window.A=A;
