@@ -145,7 +145,7 @@ async function readF(f){const x=f.name.split('.').pop().toLowerCase();
 A.gen=async()=>{const id=mmid(),f=$('#f').files[0],st=$('#gs');if(!f)return toast('اختر ملفًا أولًا');
  try{st.textContent='جاري قراءة الملف...';const text=(await readF(f)).slice(0,40000);if(text.trim().length<200)throw Error('الملف قصير أو غير مقروء');
   st.textContent='🤖 جاري توليد الأسئلة...';
-  const r=await fetch(WORKER,{method:'POST',body:JSON.stringify({text,n:+$('#n').value,level:$('#lv').value,token:await auth.currentUser.getIdToken()})}),j=await r.json();if(!r.ok)throw Error(j.error||'فشل التوليد');
+  const r=await fetch(WORKER,{method:'POST',body:JSON.stringify({text,n:+$('#n').value,level:$('#lv').value,token:await auth.currentUser.getIdToken()})}),tx=await r.text();let j;try{j=JSON.parse(tx)}catch(x){throw Error('الخادم مشغول، جرّب مرة أخرى بعد دقيقة')}if(!r.ok)throw Error(j.error||'فشل التوليد');
   await setDoc(doc(db,'matches',id,'secret','key'),{k:j.key});
   await updateDoc(doc(db,'matches',id),{questions:j.questions,n:j.questions.length,status:'lobby'})}catch(e){st.textContent='❌ '+(e.message||'خطأ')}};
 for(const k in A){const f=A[k];A[k]=async(...a)=>{try{return await f(...a)}catch(e){toast('حدث خطأ: '+(e.code||e.message))}}}
@@ -158,7 +158,7 @@ async function mv(id){const m=MS[id];if(!m)return '<div class=card>جاري ال
  const head=`<div class="card vs"><div class=pl>${av(me.name,me.photo,'lg')}<b>${esc(me.name)}</b></div><span class=vsb>VS</span><div class=pl>${av(o.name,o.photo,'lg')}<b>${esc(o.name)}</b></div></div>`;
  if(m.status=='invited')return head+(m.p2==uid?`<button class=btn onclick="A.acc('${id}',1)">✓ قبول</button> <button class="btn ghost" onclick="A.acc('${id}',0)">✕ رفض</button>`:'<p class=mut>⏳ بانتظار قبول الدعوة…</p>');
  if(m.status=='declined')return head+'<p class=err>تم رفض الدعوة</p>';
- if(m.status=='setup')return head+`<div class=card><h3>📄 ارفع ملف المادة (PDF / TXT / DOCX)</h3><input type=file id=f accept=".pdf,.txt,.docx"><select id=n>${[5,10,15,20,30].map(x=>`<option ${x==10?'selected':''}>${x}</option>`).join('')}</select><select id=lv><option>سهل</option><option>متوسط</option><option>صعب</option><option selected>مختلط</option></select><button class=btn onclick=A.gen()>🤖 توليد الأسئلة</button><div id=gs class=mut></div></div>`;
+ if(m.status=='setup')return head+`<div class=card><h3>📄 ارفع ملف المادة (PDF / TXT / DOCX)</h3><input type=file id=f accept=".pdf,.txt,.docx"><select id=n>${[5,10,15,20,30].map(x=>`<option ${x==5?'selected':''}>${x}</option>`).join('')}</select><select id=lv><option>سهل</option><option>متوسط</option><option>صعب</option><option selected>مختلط</option></select><button class=btn onclick=A.gen()>🤖 توليد الأسئلة</button><div id=gs class=mut></div></div>`;
  if(m.status=='lobby'){const mine=m.p1==uid?m.p1Ready:m.p2Ready;
   if(m.p1Ready&&m.p2Ready&&!m.startAt)updateDoc(doc(db,'matches',id),{status:'playing',startAt:serverTimestamp()}).catch(()=>{});
   return head+`<div class=card style=text-align:center><h2>⚔️ منافسة جديدة</h2><p>${m.n} أسئلة</p><p>⏱️ 120 ثانية / سؤال</p><p class=mut>${m.p1Ready?'✓':'…'} ${m.p1==uid?'أنت':esc(o.name)} · ${m.p2Ready?'✓':'…'} ${m.p2==uid?'أنت':esc(o.name)}</p>${mine?'<p>بانتظار الخصم…</p>':'<button class=btn onclick=A.rdy()>جاهز</button>'}</div>`}
