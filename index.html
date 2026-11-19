@@ -1,4 +1,4 @@
-<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>AY Arena</title><link rel="manifest" href="manifest.json"><link rel="icon" type="image/png" href="icon-192.png"><link rel="apple-touch-icon" href="apple-touch-icon.png"><meta name="theme-color" content="#0a0a10">
+<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>AY Arena</title><link rel="manifest" href="manifest.json"><link rel="icon" type="image/png" href="icon-192.png"><link rel="apple-touch-icon" href="apple-touch-icon.png"><meta name="theme-color" content="#0a0a10"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="مذاكرة">
 <style>
 :root{--c:#151522;--c2:#1d1d2e;--r:#c0173a;--b:#1e40af;--t:#ececf3;--m:#8b8ba3}
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 80% -10%,#2a0a14,#0a0a10 55%) fixed;color:var(--t);font-family:system-ui,"Segoe UI",Tahoma,sans-serif;min-height:100vh}
@@ -32,7 +32,7 @@ img.av,.av{object-fit:cover;border:2px solid #c0173a}.av.lg{width:72px;height:72
 .pl{display:flex;flex-direction:column;align-items:center;gap:6px}.vsb{font-size:22px;font-weight:800;color:var(--r)}
 .bar{height:8px;background:#26263a;border-radius:8px;overflow:hidden;margin:6px 0 14px}.bar i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#1e40af,#c0173a);transition:width .3s linear}
 .opt{display:flex;align-items:center;gap:12px;border:1px solid #2c2c44}.opt .lt{background:var(--c);border-radius:8px;width:30px;height:30px;display:grid;place-items:center;font-weight:700;flex:none;color:var(--r)}
-.conf{text-align:center;font-size:30px;animation:pop 1s}h2.win{font-size:28px}
+.md{position:fixed;inset:0;background:#000b;z-index:20;display:grid;place-items:center;padding:16px}.md>div{background:var(--c);border:1px solid var(--r);border-radius:20px;padding:22px;max-width:420px;width:100%;line-height:1.9}.md ol{padding-right:20px;margin:8px 0}.inst b{display:block;margin-bottom:8px}.conf{text-align:center;font-size:30px;animation:pop 1s}h2.win{font-size:28px}
 @keyframes in{from{opacity:0;top:-20px}}@keyframes pop{50%{transform:scale(1.12)}}
 @media(max-width:760px){nav{inset:auto 0 0 0;width:auto;flex-direction:row;justify-content:space-around;padding:6px 6px calc(6px + env(safe-area-inset-bottom));border-left:0;border-top:1px solid #26263a;z-index:5}nav span{display:none}nav a.ct{margin:0;border:0}main{margin:0;padding:16px 14px 90px}}
 </style></head><body><div id="app"></div>
@@ -46,6 +46,10 @@ const WORKER="https://ay-arena-ai.shmedsaberahmed.workers.dev";
 const db=getFirestore(initializeApp(cfg)),auth=getAuth();
 const $=s=>document.querySelector(s),v=i=>($('#'+i)?.value||'').trim(),esc=s=>String(s??'').replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
 const A={};window.A=A;
+let dp=null;addEventListener('beforeinstallprompt',e=>{e.preventDefault();dp=e});
+const isApp=()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone;
+const inst=()=>isApp()?'':`<div class="card inst"><b>📲 ثبّت التطبيق على هاتفك</b><div class=row><button class=btn onclick=A.andr()>🤖 تثبيت على أندرويد</button><button class="btn ghost" onclick=A.ios()>🍎 تثبيت على آيفون</button></div></div>`;
+const modal=h=>{const d=document.createElement('div');d.className='md';d.onclick=e=>e.target==d&&d.remove();d.innerHTML=`<div>${h}<button class=btn onclick="this.closest('.md').remove()">تمام</button></div>`;document.body.append(d)};
 let uid,me,U={},F=[],MS={},NT=[],RC={},ANS=null,ansId='',ansUn=null,busy=0,lastTry=0,regBusy=0,lk='',subs=[],started=0,pollT=0;
 const toast=t=>{const e=document.createElement('div');e.className='toast';e.textContent=t;document.body.append(e);setTimeout(()=>e.remove(),3500)};
 const user=async id=>U[id]||(U[id]=(await getDoc(doc(db,'users',id))).data()||{name:'؟'});
@@ -55,7 +59,7 @@ const mmid=()=>location.hash.split('/')[1];
 const row=(id,x)=>`<div class="card row">${av(U[id].name,U[id].photo)}<div><b>${esc(U[id].name)}</b><div class=mut>${esc(U[id].uniqueId)}</div><small class=mut>${esc(U[id].bio||'')}</small></div><span style=flex:1></span>${x}</div>`;
 
 /* ---------- الدخول ---------- */
-function authView(m='in'){const up=m=='up';$('#app').innerHTML=`<div class=auth><div class=card><h1>⚔️ AY Arena</h1><p class=mut>منافسة المذاكرة بين الأصدقاء</p>${up?'<input id=n placeholder="الاسم">':''}<input id=p inputmode=tel placeholder="رقم الهاتف"><input id=pw type=password placeholder="كلمة السر">${up?'<input id=pw2 type=password placeholder="تأكيد كلمة السر"><input id=c placeholder="رمز الدخول" autocomplete=off>':''}<div id=err class=err></div><button class=btn onclick="A.${up?'reg':'login'}()">${up?'إنشاء حساب':'تسجيل الدخول'}</button><br><button class="btn ghost" onclick="A.mode('${up?'in':'up'}')">${up?'لدي حساب':'إنشاء حساب جديد'}</button></div></div>`}
+function authView(m='in'){const up=m=='up';$('#app').innerHTML=`<div class=auth><div class=card><h1>⚔️ AY Arena</h1><p class=mut>منافسة المذاكرة بين الأصدقاء</p>${up?'<input id=n placeholder="الاسم">':''}<input id=p inputmode=tel placeholder="رقم الهاتف"><input id=pw type=password placeholder="كلمة السر">${up?'<input id=pw2 type=password placeholder="تأكيد كلمة السر"><input id=c placeholder="رمز الدخول" autocomplete=off>':''}<div id=err class=err></div><button class=btn onclick="A.${up?'reg':'login'}()">${up?'إنشاء حساب':'تسجيل الدخول'}</button><br><button class="btn ghost" onclick="A.mode('${up?'in':'up'}')">${up?'لدي حساب':'إنشاء حساب جديد'}</button></div>${inst()}</div>`}
 A.mode=authView;
 const em=()=>v('p').replace(/\D/g,'')+'@ay-study.app';
 A.login=async()=>{try{await signInWithEmailAndPassword(auth,em(),$('#pw').value)}catch(e){$('#err').textContent='بيانات الدخول غير صحيحة'}};
@@ -93,7 +97,7 @@ const loadSt=()=>setTimeout(()=>fillStats().then(o=>{const e=$('#st');if(e)e.inn
 const V={
 home:async()=>{const pend=F.filter(f=>f.status=='pending'&&f.to==uid).length,L=Object.values(MS),inv=L.filter(m=>m.status=='invited'&&m.p2==uid),act=L.filter(m=>['setup','lobby','playing'].includes(m.status)&&!RC[m.id]);
  await Promise.all([...inv,...act].map(m=>user(other(m))));NT.filter(n=>!n.read).forEach(n=>updateDoc(doc(db,'notifications',n.id),{read:true}).catch(()=>{}));loadSt();
- return `<div class=hero><div class=row>${av(me.name,me.photo,'lg')}<div><h2>مرحبًا ${esc(me.name)} 👋</h2><div class=mut>🆔 ${esc(me.uniqueId)}</div></div></div></div><div class=grid><a class="card qa" href=#new><b>⚔️</b>بدء منافسة</a><a class="card qa" href=#friends><b>👥</b>الأصدقاء والطلبات ${pend?`<i class=bd>${pend}</i>`:''}</a><a class="card qa" href=#history><b>🏆</b>سجل المنافسات</a><a class="card qa" href=#me><b>👤</b>حسابي</a></div><div id=st class=grid></div>
+ return `<div class=hero><div class=row>${av(me.name,me.photo,'lg')}<div><h2>مرحبًا ${esc(me.name)} 👋</h2><div class=mut>🆔 ${esc(me.uniqueId)}</div></div></div></div>${inst()}<div class=grid><a class="card qa" href=#new><b>⚔️</b>بدء منافسة</a><a class="card qa" href=#friends><b>👥</b>الأصدقاء والطلبات ${pend?`<i class=bd>${pend}</i>`:''}</a><a class="card qa" href=#history><b>🏆</b>سجل المنافسات</a><a class="card qa" href=#me><b>👤</b>حسابي</a></div><div id=st class=grid></div>
  ${inv.map(m=>`<div class="card row">⚔️ <b>${esc(U[m.p1].name)}</b> دعاك إلى منافسة<span style=flex:1></span><button class=btn onclick="A.acc('${m.id}',1)">✓ قبول</button><button class="btn ghost" onclick="A.acc('${m.id}',0)">✕</button></div>`).join('')}
  ${act.map(m=>`<a class="card row" href="#match/${m.id}">▶️ منافسة مع ${esc(U[other(m)].name)} — متابعة</a>`).join('')}
  <h3>🔔 الإشعارات</h3>${[...NT].sort((a,b)=>ts(b.createdAt)-ts(a.createdAt)).slice(0,8).map(n=>`<div class=card>${esc(n.msg)}</div>`).join('')||'<p class=mut>لا توجد إشعارات</p>'}`},
@@ -127,6 +131,8 @@ A.inv=async o=>{const r=await addDoc(collection(db,'matches'),{p1:uid,p2:o,playe
 A.acc=async(id,ok)=>{await updateDoc(doc(db,'matches',id),{status:ok?'setup':'declined'});notify(MS[id].p1,ok?`✅ ${me.name} قبل المنافسة`:`${me.name} رفض المنافسة`);if(ok)location.hash='match/'+id};
 A.save=async()=>{const name=v('nm').slice(0,40),bio=v('bio').slice(0,200);if(!name)return;await updateDoc(doc(db,'users',uid),{name,bio});me.name=name;me.bio=bio;toast('تم الحفظ')};
 A.photo=async inp=>{const f=inp.files[0];if(!f)return;inp.blur();const im=new Image();im.src=URL.createObjectURL(f);await im.decode();const c=document.createElement('canvas');c.width=c.height=160;const z=Math.min(im.width,im.height);c.getContext('2d').drawImage(im,(im.width-z)/2,(im.height-z)/2,z,z,0,0,160,160);const photo=c.toDataURL('image/jpeg',.8);await updateDoc(doc(db,'users',uid),{photo});me.photo=photo;U[uid]=me;toast('تم تحديث الصورة');render()};
+A.andr=async()=>{if(dp){dp.prompt();await dp.userChoice;dp=null;return}modal('<b>التثبيت على أندرويد</b><ol><li>افتح الموقع من متصفح <b>Chrome</b>.</li><li>اضغط على القائمة <b>⋮</b> (أعلى اليمين).</li><li>اختر <b>تثبيت التطبيق</b> أو <b>إضافة إلى الشاشة الرئيسية</b>.</li><li>اضغط <b>تثبيت</b>.</li></ol>')};
+A.ios=()=>modal('<b>التثبيت على آيفون</b><ol><li>افتح الموقع من متصفح <b>Safari</b> (مش Chrome).</li><li>اضغط زر المشاركة <b>⬆︎</b> (أسفل الشاشة).</li><li>مرّر لأسفل واختر <b>إضافة إلى الشاشة الرئيسية</b>.</li><li>اضغط <b>إضافة</b>، وهتلاقي الأيقونة على شاشتك.</li></ol>');
 A.rdy=()=>{const m=MS[mmid()];return updateDoc(doc(db,'matches',m.id),{[m.p1==uid?'p1Ready':'p2Ready']:true})};
 A.pick=async i=>{const m=MS[mmid()];if(!m||!ANS||busy)return;const c=Object.keys(ANS).length;if(c>=m.n)return;busy=1;
  try{await setDoc(doc(db,'matches',m.id,'answers',uid+'_'+c),{uid,q:c,choice:i,at:serverTimestamp()})}catch(e){if(i>=0)toast('تعذر تسجيل الإجابة')}busy=0};
